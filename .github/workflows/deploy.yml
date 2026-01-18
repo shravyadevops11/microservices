@@ -1,0 +1,23 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build images
+      run: |
+        docker build -t ${{ secrets.DOCKER_USER }}/config-service ./config-service
+        docker build -t ${{ secrets.DOCKER_USER }}/log-aggregator ./log-aggregator-service
+
+    - name: Push images
+      run: |
+        echo "${{ secrets.DOCKER_PASS }}" | docker login -u "${{ secrets.DOCKER_USER }}" --password-stdin
+        docker push ${{ secrets.DOCKER_USER }}/config-service
+        docker push ${{ secrets.DOCKER_USER }}/log-aggregator
