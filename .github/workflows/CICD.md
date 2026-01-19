@@ -1,0 +1,49 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # ---------------- Build Docker Images ----------------
+    - name: Build images
+      run: |
+        docker build -t ${{ secrets.DOCKER_USER }}/config-service:latest ./config-service
+        docker build -t ${{ secrets.DOCKER_USER }}/log-aggregator:latest ./log-aggregator-service
+
+    # ---------------- Push Docker Images ----------------
+    - name: Push images
+      run: |
+        echo "${{ secrets.DOCKER_PASS }}" | docker login -u "${{ secrets.DOCKER_USER }}" --password-stdin
+        docker push ${{ secrets.DOCKER_USER }}/config-service:latest
+        docker push ${{ secrets.DOCKER_USER }}/log-aggregator:latest
+
+    # ---------------- Setup kubectl ----------------
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: v1.29.0
+
+    # ---------------- Configure Kubeconfig ----------------
+    - name: Configure kubeconfig
+      run: |
+        mkdir -p $HOME/.kube
+        echo "${{ secrets.KUBECONFIG }}" | base64 --decode > $HOME/.kube/config
+
+    # ---------------- Deploy to Kubernetes ----------------
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f k8s/mysql.yaml
+        kubectl apply -f k8s/redis.yaml
+        kubectl apply -f k8s/config-service.yaml
+        kubectl apply -f k8s/log-aggregator.yaml
+
+        kubectl rollout status deployment/config-service
+        kubectl rollout status deployment/log-aggregator
